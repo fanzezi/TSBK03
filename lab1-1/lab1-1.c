@@ -42,7 +42,7 @@
 #define H 512
 
 #define NUM_LIGHTS 4
-#define PASSES 10
+#define PASSES 30
 
 void OnTimer(int value);
 
@@ -163,34 +163,22 @@ void display(void)
 
 	// Done rendering the FBO! Set up for rendering on screen, using the result as texture!
 	//truncate 
-	//runfilter(truncShader, fbo1, 0L, fbo2);
-	glUseProgram(truncShader);
-	glBindTexture(GL_TEXTURE_2D, fbo3->texid);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	runfilter(truncShader, fbo1, 0L, fbo2);
 
-
-	useFBO(fbo2, fbo3, 0L);
-    DrawModel(squareModel, truncShader, "in_Position", NULL, "in_TexCoord");
-
-	//lowpass en gång
-	//runfilter(lowpass, fbo1,0L,fbo2); 
-
+	// ping-poing 
 	for(int i =0; i < PASSES; i++){
 		//lowpass PASSES times.
-		runfilter(lowpass, fbo1,0L,fbo2); 
+		runfilter(lowpass, fbo2,0L,fbo3); 
 		// Swap ping and pong so the next pass uses the result from the previous pass
 		// Because of this swap, the final result will be stored in fbo1
-		FBOstruct *tmp = fbo1;
-		fbo1 = fbo2;
+		FBOstruct *tmp = fbo3;
+		fbo3 = fbo2;
 		fbo2 = tmp;
 
 	}
+	// Adds Bloom effect into original image
+	runfilter(addshader, fbo3, fbo1, fbo2);
 
-	//runfilter(addshader, fbo1, fbo2, fbo2);
-
-
-	
 
 	//glFlush(); // Can cause flickering on some systems. Can also be necessary to make drawing complete.
 	useFBO(0L, fbo2, 0L);
@@ -199,11 +187,6 @@ void display(void)
 
 	// Activate second shader program
 	glUseProgram(plaintextureshader);
-
-	//Low-pass
-	//glUseProgram(lowpass);
-	//useFBO(fbo2, fbo1, 0L);
-	//DrawModel(squareModel, lowpass, "in_Position", NULL, "in_TexCoord");
 
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_DEPTH_TEST);
@@ -214,10 +197,10 @@ void display(void)
 
 void runfilter(GLuint shader, FBOstruct *in1, FBOstruct *in2, FBOstruct *out){
 
-	glUseProgram(shader);
 	// Many of these things would be more efficiently done once and for all
-    glDisable(GL_CULL_FACE); // stäng av back-face culling
-    glDisable(GL_DEPTH_TEST); // stäng av Z-buffern
+	glUseProgram(shader);
+    glDisable(GL_CULL_FACE); // disable back-face culling
+    glDisable(GL_DEPTH_TEST); // disable Z-buffern
     glUniform1i(glGetUniformLocation(shader, "texUnit"), 0);
     glUniform1i(glGetUniformLocation(shader, "texUnit2"), 1);
 

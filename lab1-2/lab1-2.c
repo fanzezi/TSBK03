@@ -5,12 +5,15 @@
 // eller snarare (nyare system):
 // gcc -Wall -o lab1-1 -DGL_GLEXT_PROTOTYPES lab1-1.c ../common/*.c  ../common/Linux/MicroGlut.c -I../common -I../common/Linux -lXt -lX11 -lm -lGL
 
+//MAC:
+// gcc lab1-2.c ../common/*.c ../common/Mac/MicroGlut.m -framework OpenGL -framework Cocoa -Wno-deprecated-declarations -o lab1-2 -I../common
+
 // 2018: No zpr, trackball code added in the main program.
 
 #ifdef __APPLE__
 // Mac
 	#include <OpenGL/gl3.h>
-	#include "MicroGlut.h"
+	#include "Mac/MicroGlut.h"
 	// uses framework Cocoa
 #else
 	#ifdef WIN32
