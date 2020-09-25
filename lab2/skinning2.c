@@ -10,6 +10,8 @@
 // gcc skinning2.c ../common/*.c -lGL -o skinning2 -I../common
 // not working any more. This is untested but closer to the truth:
 // gcc skinning2.c -o skinning2 ../common/*.c ../common/Linux/MicroGlut.c -I../common -I../common/Linux -DGL_GLEXT_PROTOTYPES -lXt -lX11 -lGL -lm
+// MAC:
+// gcc skinning2.c -o skinning2 ../common/*.c ../common/Mac/MicroGlut.m -I../common -framework OpenGL -framework Cocoa -Wno-deprecated-declarations
 
 #include <stdio.h>
 #include <math.h>
@@ -29,7 +31,7 @@
 	#endif
 #endif
 
-#include "MicroGlut.h"
+#include "Mac/MicroGlut.h"
 #include "GL_utilities.h"
 #include "VectorUtils3.h"
 #include "loadobj.h"
@@ -67,7 +69,7 @@ typedef struct Triangle
 #define true 1
 #endif
 
-#define BONE_LENGTH 4.0
+#define BONE_LENGTH 2.0
 
 Triangle g_poly[kMaxg_poly];
 
@@ -94,13 +96,12 @@ void initBoneWeights(void)
 	long	row, corner;
 	int bone;
 
-	// sätter värden till alla vertexar i meshen
+	// sï¿½tter vï¿½rden till alla vertexar i meshen
 	for (row = 0; row < kMaxRow; row++)
 		for (corner = 0; corner < kMaxCorners; corner++)
 		{
 			float boneWeights[kMaxBones];
 			float totalBoneWeight = 0.f;
-
 			float maxBoneWeight = 0.f;
 
 			for (bone = 0; bone < kMaxBones; bone++)
@@ -154,7 +155,7 @@ void BuildCylinder()
 {
   long	row, corner, cornerIndex;
 
-  // sätter värden till alla vertexar i meshen
+  // sï¿½tter vï¿½rden till alla vertexar i meshen
   for (row = 0; row < kMaxRow; row++)
     for (corner = 0; corner < kMaxCorners; corner++)
       {
@@ -186,7 +187,7 @@ void BuildCylinder()
 	    g_poly[cornerIndex * 2 + 1].v3 = cornerIndex + kMaxCorners;
 	  }
 	else
-	  { // Specialfall: sista i varvet, gåu runt hörnet korrekt
+	  { // Specialfall: sista i varvet, gï¿½u runt hï¿½rnet korrekt
 	    cornerIndex = row * kMaxCorners + corner;
 	    g_poly[cornerIndex * 2].v1 = cornerIndex;
 	    g_poly[cornerIndex * 2].v2 = cornerIndex + 1 - kMaxCorners;
@@ -198,7 +199,7 @@ void BuildCylinder()
 	  }
       }
 
-  // lägger en kopia av orginal modellen i g_vertsRes
+  // lï¿½gger en kopia av orginal modellen i g_vertsRes
   memcpy(g_vertsRes,  g_vertsOrg, kMaxRow * kMaxCorners* sizeof(vec3));
   memcpy(g_normalsRes,  g_normalsOrg, kMaxRow * kMaxCorners* sizeof(vec3));
 }
@@ -208,7 +209,7 @@ void BuildCylinder()
 //		B O N E
 // Desc:	en enkel ben-struct med en 
 //			pos-vektor och en rot-vektor 
-//			rot vektorn skulle lika gärna 
+//			rot vektorn skulle lika gï¿½rna 
 //			kunna vara av 3x3 men VectorUtils2 har bara 4x4
 typedef struct Bone
 {
@@ -219,8 +220,8 @@ typedef struct Bone
 
 ///////////////////////////////////////
 //		G _ B O N E S
-// vårt skelett
-Bone g_bones[kMaxBones]; // Ursprungsdata, Šndra ej
+// vï¿½rt skelett
+Bone g_bones[kMaxBones]; // Ursprungsdata, ï¿½ndra ej
 Bone g_bonesRes[kMaxBones]; // Animerat
 
 
@@ -250,7 +251,62 @@ void DeformCylinder()
   //float w[kMaxBones];
   int row, corner;
 
-  // för samtliga vertexar 
+//Modell till benkoordinater 
+  mat4 Mmb[kMaxBones];
+  //Ben till modellkoordinater
+  mat4 Mbm[kMaxBones];
+
+// BÃ¶rjar ifrÃ¥n yttersta benet(leaf-node) till fÃ¶rsta benet ("root")
+  for(int bone = kMaxBones-1; bone > -1; bone--){
+	  vec3 restTranslation;
+	  
+	  //Ta skillnader i positionerna fÃ¶r att skapa translationer 
+	  if(bone != 0){ // Inte fÃ¶rsta benet
+		  restTranslation = VectorSub(g_bones[bone].pos, g_bones[bone-1].pos);
+
+	  }else{ //Ã„r fÃ¶rsta benet
+		  restTranslation = g_bones[bone].pos;
+	  }
+
+	  // Nu kan vi fÃ¥ resting translation
+	  mat4 t_rest = T(restTranslation.x,restTranslation.y, restTranslation.z);
+	  
+	  //enklare varnamn
+	  mat4 r_rest = g_bones[bone].rot;
+	  mat4 r_anim = g_bonesRes[bone].rot;
+
+	//M'bone = Trest*Rrest*Ranim
+	  mat4 M_bone = Mult(t_rest, Mult( r_rest, r_anim));
+
+	  //baspositionen i modellkoordinaterna
+	  vec3 basePosition = g_bones[bone].pos;
+	  
+
+	//inversen av baspositionerna
+
+	mat4 inv_basePos = T(-basePosition.x, -basePosition.y, -basePosition.z);
+	mat4 baseRot = g_bones[bone].rot;
+	mat4 inv_baseRot = Transpose(baseRot);
+
+	//vbone2 = M^-1bone2*M^-1bone1*vm
+	//Lokala koordinaterna fÃ¶r ett ben
+	mat4 inv_BaseTransformation = Mult(inv_baseRot, inv_basePos);
+
+	//set model->bone transformation and bone->model transformation
+	Mmb[bone]= inv_BaseTransformation; // model --> base coords
+	Mbm[bone] = M_bone; // bones --> model
+
+
+	// Check previous bones and set model-coords.
+	for(int i = 0; i < kMaxBones; i++){
+		Mbm[i] = Mult(Mbm[bone], Mbm[i]);
+	}
+
+  }
+
+
+
+  // fï¿½r samtliga vertexar 
   for (row = 0; row < kMaxRow; row++)
   {
     for (corner = 0; corner < kMaxCorners; corner++)
@@ -258,13 +314,24 @@ void DeformCylinder()
       // ---------=========  UPG 4 ===========---------
       // TODO: skinna meshen mot alla benen.
       //
-      // data som du kan använda:
-      // g_bonesRes[].rot
+      // data som du kan anvï¿½nda:
+      // g_bonesRes[].rot == benpositioner (Ranimering)
       // g_bones[].pos
       // g_boneWeights
       // g_vertsOrg
       // g_vertsRes
-      
+
+	  g_vertsRes[row][corner] = SetVector(0,0,0);
+
+		for(int bone = 0; bone <kMaxBones; bone++){
+
+			vec4 baseVert = vec3tovec4(g_vertsOrg[row][corner]);
+			mat4 transformation = Mult(Mbm[bone], Mmb[bone]);
+			vec4 transformedPoint = MultVec4(transformation, baseVert);
+			// Adderar vikt till den transformerade punkten
+			vec3 contribution = ScalarMult(vec4tovec3(transformedPoint), g_boneWeights[row][corner][bone]);
+			g_vertsRes[row][corner] = VectorAdd(g_vertsRes[row][corner], contribution);
+		}
     }
   }
 }
@@ -272,17 +339,17 @@ void DeformCylinder()
 
 /////////////////////////////////////////////
 //		A N I M A T E  B O N E S
-// Desc:	en väldigt enkel animation av skelettet
+// Desc:	en vï¿½ldigt enkel animation av skelettet
 //			vrider ben 1 i en sin(counter) 
 void animateBones(void)
 {
 	int bone;
-	// Hur mycket kring varje led? €ndra gŠrna.
+	// Hur mycket kring varje led? ï¿½ndra gï¿½rna.
 	float angleScales[10] = { 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f };
 
 	float time = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
 	// Hur mycket skall vi vrida?
-	float angle = sin(time * 3.f) / 2.0f;
+	float angle = sin(time * 3.f) / 10.0f;
 
 	memcpy(&g_bonesRes, &g_bones, kMaxBones*sizeof(Bone)); 
 
@@ -295,7 +362,7 @@ void animateBones(void)
 
 ///////////////////////////////////////////////
 //		S E T  B O N E  R O T A T I O N
-// Desc:	sätter bone rotationen i vertex shadern
+// Desc:	sï¿½tter bone rotationen i vertex shadern
 // (Ej obligatorisk.)
 void setBoneRotation(void)
 {
@@ -304,7 +371,7 @@ void setBoneRotation(void)
 
 ///////////////////////////////////////////////
 //		 S E T  B O N E  L O C A T I O N
-// Desc:	sätter bone positionen i vertex shadern
+// Desc:	sï¿½tter bone positionen i vertex shadern
 // (Ej obligatorisk.)
 void setBoneLocation(void)
 {
@@ -313,13 +380,13 @@ void setBoneLocation(void)
 
 ///////////////////////////////////////////////
 //		 D R A W  C Y L I N D E R
-// Desc:	sätter bone positionen i vertex shadern
+// Desc:	sï¿½tter bone positionen i vertex shadern
 void DrawCylinder()
 {
   animateBones();
 
   // ---------=========  UPG 2 (extra) ===========---------
-  // ersätt DeformCylinder med en vertex shader som gör vad DeformCylinder gör.
+  // ersï¿½tt DeformCylinder med en vertex shader som gï¿½r vad DeformCylinder gï¿½r.
   // begynelsen till shaderkoden ligger i filen "ShaderCode.vert" ...
   // 
 	
@@ -415,7 +482,7 @@ int main(int argc, char **argv)
 			kMaxRow*kMaxCorners,
 			kMaxg_poly * 3);
 
-  g_shader = loadShaders("shader.vert" , "shader.frag");
+  g_shader = loadShaders("shader2.vert" , "shader2.frag");
 
   glutMainLoop();
   exit(0);

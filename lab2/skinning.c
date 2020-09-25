@@ -11,6 +11,10 @@
 // MAC:
 // gcc skinning.c -o skinning ../common/*.c ../common/Mac/MicroGlut.m -I../common -framework OpenGL -framework Cocoa -Wno-deprecated-declarations
 
+
+//Stichingen ska vi inte ändra vikter på (0.0, 0.0, 0.0)
+// Skinningen ska vi ändra vikter på
+
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
@@ -68,7 +72,9 @@ vec3 g_normalsRes[kMaxRow][kMaxCorners];
 // vertex attributes sent to OpenGL
 vec3 g_boneWeights[kMaxRow][kMaxCorners];
 
-float weight[kMaxRow] = {0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0};
+//float weight[kMaxRow] = {0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0};
+float weight[kMaxRow] = {0.0, 0.0, 0.0, 0.1, 0.3, 0.7, 0.9, 1.0, 1.0, 1.0};
+
 
 Model *cylinderModel; // Collects all the above for drawing with glDrawElements
 
@@ -193,23 +199,8 @@ void DeformCylinder()
 	// vec3 v1, v2;
 	int row, corner;
 
-	//Translatera
-
-	mat4 Tbone1 = T(g_bones[0].pos.x, g_bones[0].pos.y, g_bones[0].pos.z);
-	mat4 Tbone2 = T(g_bones[1].pos.x, g_bones[1].pos.y, g_bones[1].pos.z);
-	
-	//multiplicera translationen med rotationen
-	mat4 Mbone1 = Mult(Tbone1, g_bones[0].rot);
-	mat4 Mbone2 = Mult(Tbone2, g_bones[1].rot);	
-
-	//inversen av resultatet (since these transformations are in the other direction)
-	mat4 MIbone1 = InvertMat4(Mbone1);
-	mat4 MIbone2 = InvertMat4(Mbone2);
-
-	//Mbine' = Mbone * Ranim = Trest * Rrest * Ranim (sid. 163)
-	mat4 MPbone1 = Mult(Mbone1, g_bones[0].rot);
-	mat4 MPbone2 = Mult(Mbone2, g_bones[1].rot);
-
+	Point3D g_vertstmp0[kMaxRow][kMaxCorners];
+	Point3D g_vertstmp1[kMaxRow][kMaxCorners];
 	
 	// f�r samtliga vertexar 
 	for (row = 0; row < kMaxRow; row++)
@@ -230,18 +221,27 @@ void DeformCylinder()
 			//
 			// row traverserar i cylinderns l�ngdriktning,
 			// corner traverserar "runt" cylindern
-		
-		/*
-			vec3 v = MultVec3(Mult(Mult(MPbone1, MPbone2),Mult(MIbone1, MIbone2)), g_vertsOrg[row][corner]);
-		
-			if(weight[row] > 0){
-				g_vertsRes[row][corner].x = v.x * weight[row];
-				g_vertsRes[row][corner].y = v.y * weight[row];
-				g_vertsRes[row][corner].z = v.z * weight[row];
 
-			}
-		*/	
-			
+			// Translatera
+			mat4 T0b = T(g_bones[0].pos.x, g_bones[0].pos.y, g_bones[0].pos.z);
+			mat4 T1b = T(g_bones[1].pos.x, g_bones[1].pos.y, g_bones[1].pos.z);
+			// Inversen 
+			mat4 invT0b = InvertMat4(T0b);
+			mat4 invT1b = InvertMat4(T1b);
+			// Multiplicerar resultatet med ursprunglig vertexdata.
+			g_vertstmp0[row][corner] = MultVec3(Mult(T0b, Mult(g_bones[0].rot, invT0b)), g_vertsOrg[row][corner]);
+			g_vertstmp1[row][corner] = MultVec3(Mult(T1b, Mult(g_bones[1].rot, invT1b)), g_vertsOrg[row][corner]);
+
+
+			//Comment out for UPPG2
+		/*
+			//Skicka vertexdatan till OpenGL
+			if(weight[row])
+				g_vertsRes[row][corner] = g_vertstmp1[row][corner];
+			else
+				g_vertsRes[row][corner] = g_vertstmp0[row][corner];
+
+		*/
 			// ---=========	Uppgift 2: Soft skinning i CPU ===========------
 			// Deformera cylindern enligt det skelett som finns
 			// i g_bones.
@@ -252,13 +252,13 @@ void DeformCylinder()
 			// g_boneWeights inneh�ller blendvikter f�r benen.
 			// g_vertsOrg inneh�ller ursprunglig vertexdata.
 			// g_vertsRes inneh�ller den vertexdata som skickas till OpenGL.
-		/*
-			vec3 wm1 = ScalarMult(MultVec3(MPbone1, g_vertsOrg[row][corner]), g_boneWeights[row][corner].x);
-			vec3 wm2 = ScalarMult(MultVec3(MPbone2, g_vertsOrg[row][corner]),g_boneWeights[row][corner].y);
-			//vec3 wm1 = ScalarMult()
 
-			g_vertsRes[row][corner] = VectorAdd(wm1,wm2);
-		*/
+			g_vertsRes[row][corner].x =(g_vertstmp1[row][corner].x) *(weight[row]);
+			g_vertsRes[row][corner].y =(g_vertstmp1[row][corner].y) *(weight[row]);
+
+			g_vertsRes[row][corner].x += g_vertstmp0[row][corner].x *(1-weight[row]);
+			g_vertsRes[row][corner].y += g_vertstmp0[row][corner].y *(1-weight[row]);
+			
 		}
 	}
 }
@@ -304,10 +304,12 @@ void setBoneLocation(void)
 {
 	// Uppgift 3 TODO: H�r beh�ver du skicka �ver benens position
 	// till vertexshadern
+	
 	mat4 tmp_matrix = T(g_bones[0].pos.x, g_bones[0].pos.y, g_bones[0].pos.z );
 	glUniformMatrix4fv(glGetUniformLocation(g_shader, "transBones_0"),1,GL_TRUE, tmp_matrix.m);
 	tmp_matrix = T(g_bones[1].pos.x, g_bones[1].pos.y, g_bones[1].pos.z );
 	glUniformMatrix4fv(glGetUniformLocation(g_shader, "transBones_1"),1,GL_TRUE, tmp_matrix.m);
+	
 }
 
 

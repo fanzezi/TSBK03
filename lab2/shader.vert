@@ -21,15 +21,19 @@ const vec3 lightDir = normalize(vec3(0.3, 0.5, 1.0));
 
 void main(void)
 {
+
+	//UPPG 2
+	// transformera resultatet med ModelView- och Projection-matriserna
+	//gl_Position = matrix * vec4(in_Position, 1.0);
+
+	//UPG3
 	// Rotationen av första benen
 	vec3 posx = vec3(in_TexCoord.x*(transBones_0*rotBones_0*inverse(transBones_0))*vec4(in_Position,1));
 	vec3 posy = vec3(in_TexCoord.y*(transBones_1*rotBones_1*inverse(transBones_1))*vec4(in_Position,1));
 
 	gl_Position = matrix * vec4(posx+posy,1.0);
 
-
-	// transformera resultatet med ModelView- och Projection-matriserna
-	//gl_Position = matrix * vec4(in_Position, 1.0);
+	
 
 	// s�tt r�d+gr�n f�rgkanal till vertex Weights
 	vec4 color = vec4(in_TexCoord.x, in_TexCoord.y, 0.0, 1.0);
