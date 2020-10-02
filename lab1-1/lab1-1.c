@@ -103,6 +103,7 @@ void init(void)
 	// load the model
 //	model1 = LoadModelPlus("teapot.obj");
 	model1 = LoadModelPlus("stanford-bunny.obj");
+	
 
 	squareModel = LoadDataToModel(
 			square, NULL, squareTexCoord, NULL,

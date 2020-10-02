@@ -80,7 +80,7 @@ typedef struct
 
   vec3 F, T; // accumulated force and torque
 
-//  mat4 J, Ji; We could have these but we can live without them for spheres.
+  mat4 J, Ji; //We could have these but we can live without them for spheres.
   vec3 omega; // Angular momentum
   vec3 v; // Change in velocity
 
@@ -106,7 +106,7 @@ Material ballMt = { { 1.0, 1.0, 1.0, 1.0 }, { 1.0, 1.0, 1.0, 0.0 },
                 };
 
 
-enum {kNumBalls = 16}; // Change as desired, max 16
+enum {kNumBalls = 9}; // Change as desired, max 16
 
 //------------------------------Globals---------------------------------
 ModelTexturePair tableAndLegs, tableSurf;
@@ -186,11 +186,26 @@ void updateWorld()
 	}
 
 	// Detect collisions, calculate speed differences, apply forces
-	for (i = 0; i < kNumBalls; i++)
+    float v_rel;
+    vec3 n;
+    float impulse;
+    float elastic = 0.9;
+	for (i = 0; i < kNumBalls; i++){
         for (j = i+1; j < kNumBalls; j++)
         {
             // YOUR CODE HERE
-        }
+            n = VectorSub(ball[i].X, ball[j].X);
+
+            if(Norm(n) <= 2*kBallSize && (DotProduct(ball[i].v, n) < DotProduct(ball[j].v, n))){
+                v_rel = DotProduct(Normalize(n), VectorSub(ball[i].v, ball[j].v));
+                impulse = -(1.0 + elastic)*v_rel/((1.0/ball[i].mass) + (1.0/ball[j].mass));
+                
+                ball[i].P = VectorAdd(ScalarMult(Normalize(n), impulse), ball[i].P);
+                ball[j].P = VectorAdd(ScalarMult(Normalize(n), -impulse), ball[j].P);
+                
+            }
+        } 
+    }
 
 	// Control rotation here to reflect
 	// friction against floor, simplified as well as more correct
@@ -198,10 +213,25 @@ void updateWorld()
 	for (i = 0; i < kNumBalls; i++)
 	{
 		// YOUR CODE HERE
-        
-        vec3 perp = CrossProduct(yaxis, ball[i].v);
-		float angle = sqrt(pow(ball[i].v.x, 2.0) + pow(ball[i].v.y, 2.0) + pow(ball[i].v.z, 2.0)) * 0.2;
-		ball[i].R = MultMat4(ArbRotate(perp, -angle), ball[i].R);
+        //----- Without Friction -----
+        /*vec3 perp = CrossProduct(yaxis, ball[i].P);
+		float angle = sqrt(pow(ball[i].v.x, 2.0) + pow(ball[i].v.y, 2.0) + pow(ball[i].v.z, 2.0)) * 0.1;
+		ball[i].R = Mult(ArbRotate(perp, -angle), ball[i].R); */
+     
+        // ---- With Friction ----
+        if(Norm(ball[i].v)!= 0.0){
+            vec3 rollingDirection = CrossProduct(yaxis, ball[i].omega);
+            vec3 relVelocity = VectorSub(ball[i].v, rollingDirection);
+
+            vec3 friction = ScalarMult(relVelocity, 0.2);
+
+            ball[i].T = VectorSub(ball[i].T, CrossProduct(yaxis, friction));
+            ball[i].F = VectorSub(ball[i].F, friction); 
+
+           // printf("tT: "); printVec3(ball[i].T);
+           // printf("tF: "); printVec3(ball[i].F);
+
+        }
 	}
 
 // Update state, follows the book closely
@@ -212,6 +242,9 @@ void updateWorld()
 
 		// Note: omega is not set. How do you calculate it?
 		// YOUR CODE HERE
+       ball[i].omega = MultVec3(ball[i].Ji, ball[i].L);
+         printMat4(ball[i].Ji); 
+    
 
 //		v := P * 1/mass
 		ball[i].v = ScalarMult(ball[i].P, 1.0/(ball[i].mass));
@@ -308,11 +341,13 @@ void init()
     }
 	free(textureStr);
 
+
     // Initialize ball data, positions etc
 	for (i = 0; i < kNumBalls; i++)
 	{
 		ball[i].mass = 1.0;
 		ball[i].X = SetVector(0.0, 0.0, 0.0);
+        //ball[3].mass = 3.0;
 		ball[i].P = SetVector(((float)(i % 13))/ 50.0, 0.0, ((float)(i % 15))/50.0);
 		ball[i].R = IdentityMatrix();
 	}
@@ -328,6 +363,18 @@ void init()
     cam = SetVector(0, 2, 2);
     point = SetVector(0, 0, 0);
     zprInit(&viewMatrix, cam, point);  // camera controls
+
+    // Tröghetsmatrisen
+
+    for(int i = 0; i < kNumBalls; i++){
+        float w = ball[i].mass * kBallSize * kBallSize/12;
+        ball[i].J = S(w,w,w);
+        ball[i].Ji = InvertMat4(ball[i].J);
+        ball[i].omega = SetVector(0,0,0);
+
+        printf("\tJ: "); printMat4(ball[i].J);
+
+    } 
 
     resetElapsedTime();
 }
